@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>⚽ Football Manager Lite</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="app-header">
+  <div class="header-top">
+    <h1>⚽ Football Manager Lite</h1>
+    <div class="status" id="status">Temporada 2025 · Rodada 0/99</div>
+  </div>
+  <div class="controls">
+    <button id="btn-sim-1" class="btn btn-primary">Simular Rodada</button>
+    <button id="btn-sim-5" class="btn btn-primary">Simular 5</button>
+    <button id="btn-sim-season" class="btn btn-primary">Simular Temporada</button>
+    <button id="btn-new-season" class="btn btn-accent">Nova Temporada</button>
+    <button id="btn-export" class="btn">Exportar</button>
+    <button id="btn-import" class="btn">Importar</button>
+    <input type="file" id="file-import" accept=".json,application/json" hidden>
+  </div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button class="tab active" data-tab="div1">Divisão 1</button>
+  <button class="tab" data-tab="div2">Divisão 2</button>
+  <button class="tab" data-tab="div3">Divisão 3</button>
+  <button class="tab" data-tab="round">Rodada Atual</button>
+  <button class="tab" data-tab="history">Histórico</button>
+</nav>
+
+<main id="content"></main>
+
+<footer class="app-footer">
+  <span>Football Manager Lite · 300 clubes · 3 divisões · 99 rodadas</span>
+  <span>Dados salvos automaticamente no navegador</span>
+</footer>
+
+<script src="js/teams.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
