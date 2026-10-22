@@ -2,9 +2,8 @@
 
 /* =========================================================================
    Football Manager Lite — motor + interface
-   Arquivo único e completo. Blindado com IIFE + guarda contra execução
-   duplicada (caso a tag <script> apareça duas vezes ou o arquivo seja
-   colado em duplicata). Abre localmente sem servidor.
+   Inclui exportação da rodada atual em CSV e TSV.
+   Arquivo único, blindado contra execução duplicada via IIFE + guarda.
    ========================================================================= */
 
 (function () {
@@ -19,22 +18,21 @@
   window.__FML_LOADED__ = true;
 
   /* ------------------------- Configuração ------------------------- */
-  const HOME_ADV        = 3;      // bônus de mando (unidades de overall)
-  const NOISE           = 3;      // sigma do ruído gaussiano ("zebras")
-  const K               = 0.032;  // sensibilidade do placar à diferença
-  const BASE_GOALS      = 1.30;   // gols esperados em jogo equilibrado
-  const MAX_DIFF        = 26;     // teto de diferença de força (evita 8-0)
-  const MAX_GOALS       = 7;      // teto duro por time
-  const FORM_WEIGHT     = 2;      // peso da forma recente
-  const ROUNDS          = 99;     // rodadas por temporada (n-1 para n=100)
+  const HOME_ADV        = 3;
+  const NOISE           = 3;
+  const K               = 0.032;
+  const BASE_GOALS      = 1.30;
+  const MAX_DIFF        = 26;
+  const MAX_GOALS       = 7;
+  const FORM_WEIGHT     = 2;
+  const ROUNDS          = 99;
   const PROMOTED_COUNT  = 30;
   const RELEGATED_COUNT = 30;
   const REP_UPDATE_ROUNDS = [20, 40, 60, 80, 99];
-  const REP_FACTOR      = 0.10;   // overall por ponto de surplus
-  const REP_CAP         = 2.0;    // delta máximo por atualização
+  const REP_FACTOR      = 0.10;
+  const REP_CAP         = 2.0;
   const STORAGE_KEY     = 'football-manager-v3';
 
-  /* Clamps calculados em tempo de execução a partir dos dados reais */
   const TOTAL_TEAMS    = TEAMS_DATA.length;
   const TEAMS_PER_DIV  = Math.ceil(TOTAL_TEAMS / 3);
   const MIN_OVR        = Math.min.apply(null, TEAMS_DATA.map(function (t) { return t[1]; })) - 5;
@@ -80,10 +78,27 @@
     return Number.isInteger(r) ? String(r) : r.toFixed(1);
   }
 
+  function pad2(n) {
+    return n < 10 ? '0' + n : String(n);
+  }
+
   function divisionOfIndex(idx) {
     if (idx < TEAMS_PER_DIV) { return 1; }
     if (idx < TEAMS_PER_DIV * 2) { return 2; }
     return 3;
+  }
+
+  /* Escapa um campo para CSV/TSV: envolve em aspas se contiver o separador,
+     aspas, quebra de linha ou CR. Aspas internas viram "" (padrão RFC 4180). */
+  function escapeDelimitedField(val, sep) {
+    var s = String(val == null ? '' : val);
+    if (s.indexOf('"') !== -1 ||
+        s.indexOf(sep) !== -1 ||
+        s.indexOf('\n') !== -1 ||
+        s.indexOf('\r') !== -1) {
+      return '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
   }
 
   /* ------------------------- Estado ------------------------- */
@@ -142,7 +157,6 @@
       }
       rounds.push(games);
 
-      /* rot = [rot[0], rot[n-1], ...rot.slice(1, n-1)] */
       var next = [rot[0], rot[n - 1]].concat(rot.slice(1, n - 1));
       for (var j = 0; j < n; j++) {
         rot[j] = next[j];
@@ -431,6 +445,78 @@
     } catch (e) {
       return null;
     }
+  }
+
+  /* ------------------------- Exportação da rodada (CSV/TSV) ------------------------- */
+
+  function exportRound(fmt) {
+    if (state.round === 0) {
+      alert('Nenhuma rodada simulada ainda.\nSimule ao menos uma rodada antes de exportar.');
+      return;
+    }
+
+    var r = state.round - 1;
+    var sep = (fmt === 'tsv') ? '\t' : ';';
+    var ext = (fmt === 'tsv') ? 'tsv' : 'csv';
+    var mime = (fmt === 'tsv')
+      ? 'text/tab-separated-values;charset=utf-8'
+      : 'text/csv;charset=utf-8';
+
+    var header = [
+      'Rodada', 'Divisão',
+      'Casa', 'País Casa', 'OVR Casa',
+      'Gols Casa', 'Gols Fora',
+      'OVR Fora', 'País Fora', 'Visitante'
+    ];
+
+    var rows = [header];
+
+    for (var d = 1; d <= 3; d++) {
+      var key = 'div' + d;
+      var fx = (state.fixtures[key] && state.fixtures[key][r]) ? state.fixtures[key][r] : [];
+      var res = (state.results[key] && state.results[key][r]) ? state.results[key][r] : [];
+
+      for (var i = 0; i < fx.length; i++) {
+        var h = state.teams[fx[i][0]];
+        var a = state.teams[fx[i][1]];
+        var sc = res[i] || { gH: 0, gA: 0 };
+
+        rows.push([
+          state.round,
+          'Divisão ' + d,
+          h.name,
+          h.country,
+          fmtOvr(h.overall),
+          sc.gH,
+          sc.gA,
+          fmtOvr(a.overall),
+          a.country,
+          a.name
+        ]);
+      }
+    }
+
+    var lines = rows.map(function (row) {
+      return row.map(function (v) {
+        return escapeDelimitedField(v, sep);
+      }).join(sep);
+    });
+
+    var content = '\uFEFF' + lines.join('\r\n') + '\r\n';
+
+    var blob = new Blob([content], { type: mime });
+    var url = URL.createObjectURL(blob);
+
+    var aEl = document.createElement('a');
+    aEl.href = url;
+    aEl.download = 'rodada-' + pad2(state.round) +
+                   '-temporada-' + state.season +
+                   '.' + ext;
+    document.body.appendChild(aEl);
+    aEl.click();
+    document.body.removeChild(aEl);
+
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
   }
 
   /* ------------------------- Renderização ------------------------- */
@@ -811,6 +897,13 @@
     document.getElementById('btn-sim-season').addEventListener('click', simularTemporada);
     document.getElementById('btn-new-season').addEventListener('click', novaTemporada);
     document.getElementById('btn-export').addEventListener('click', exportState);
+
+    document.getElementById('btn-export-round-csv').addEventListener('click', function () {
+      exportRound('csv');
+    });
+    document.getElementById('btn-export-round-tsv').addEventListener('click', function () {
+      exportRound('tsv');
+    });
 
     var fileInput = document.getElementById('file-import');
     document.getElementById('btn-import').addEventListener('click', function () {
